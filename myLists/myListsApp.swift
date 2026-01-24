@@ -1,32 +1,34 @@
 //
-//  myListsApp.swift
+//  myListsApp 2.swift
 //  myLists
 //
 //  Created by Keith Sharman on 1/22/26.
 //
+
 
 import SwiftUI
 import SwiftData
 
 @main
 struct myListsApp: App {
-    var sharedModelContainer: ModelContainer = {
-        let schema = Schema([
-            Item.self,
-        ])
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
+    let container: ModelContainer
+    @StateObject private var undoCenter = UndoCenter()
 
+    init() {
         do {
-            return try ModelContainer(for: schema, configurations: [modelConfiguration])
+            let schema = Schema([ListDocument.self, ListItem.self])
+            let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
+            self.container = try ModelContainer(for: schema, configurations: [config])
         } catch {
-            fatalError("Could not create ModelContainer: \(error)")
+            fatalError("Failed to create ModelContainer: \(error)")
         }
-    }()
+    }
 
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .environmentObject(undoCenter)
         }
-        .modelContainer(sharedModelContainer)
+        .modelContainer(container)
     }
 }
