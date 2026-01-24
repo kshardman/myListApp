@@ -37,7 +37,7 @@ struct ContentView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("myLists")
+                        Text("my List App")
                             .font(.headline)
                         Text("Quick lists with Undo")
                             .font(.caption)
