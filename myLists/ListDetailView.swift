@@ -117,10 +117,14 @@ struct ListDetailView: View {
                         }
                         .accessibilityLabel("Delete completed")
 
-                        Button("Rename") {
+                        Button {
                             draftName = document.name
                             isRenaming = true
+                        } label: {
+                            Image(systemName: "square.and.pencil")
+                                .padding(8)
                         }
+                        .accessibilityLabel("Rename list")
                     }
                 }
             }
@@ -228,7 +232,7 @@ struct ListDetailView: View {
 
         let pending = UndoCenter.PendingUndo(
             kind: .bulkItems(ids, document.id),
-            message: "Deleted \(ids.count) completed",
+            message: "\(ids.count) items deleted",
             expiresAt: Date().addingTimeInterval(3)
         )
 

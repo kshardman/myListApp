@@ -20,6 +20,7 @@ struct ContentView: View {
 
     @State private var showingShare: Bool = false
     @State private var shareItems: [Any] = []
+    @State private var showingSettings: Bool = false
 
     // New-list UX
     @State private var showingNewListSheet: Bool = false
@@ -28,6 +29,25 @@ struct ContentView: View {
     var body: some View {
         NavigationStack {
             List {
+                HStack(spacing: 12) {
+                    Image(systemName: "list.bullet")
+                        .font(.system(size: 28, weight: .semibold))
+                        .frame(width: 44, height: 44)
+                        .background(.thinMaterial)
+                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("myLists")
+                            .font(.headline)
+                        Text("Quick lists with Undo")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Spacer()
+                }
+                .listRowSeparator(.hidden)
+
                 ForEach(docs) { doc in
                     NavigationLink(value: doc) {
                         Text(doc.name)
@@ -49,16 +69,28 @@ struct ContentView: View {
                 }
             }
             .scrollDismissesKeyboard(.immediately)
-            .navigationTitle("myLists")
+            .navigationTitle("")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        draftNewListName = ""
-                        showingNewListSheet = true
-                    } label: {
-                        Image(systemName: "plus")
+                    HStack(spacing: 12) {
+                        Button {
+                            draftNewListName = ""
+                            showingNewListSheet = true
+                        } label: {
+                            Image(systemName: "plus")
+                                .padding(8)
+                        }
+                        .accessibilityLabel("New list")
+
+                        Button {
+                            showingSettings = true
+                        } label: {
+                            Image(systemName: "gearshape")
+                                .padding(8)
+                        }
+                        .accessibilityLabel("Settings")
                     }
-                    .accessibilityLabel("New list")
                 }
             }
             .navigationDestination(for: ListDocument.self) { doc in
@@ -71,6 +103,9 @@ struct ContentView: View {
             }
             .sheet(isPresented: $showingShare) {
                 ShareSheet(activityItems: shareItems)
+            }
+            .sheet(isPresented: $showingSettings) {
+                SettingsView()
             }
             .sheet(isPresented: $showingNewListSheet) {
                 NewListSheet(
@@ -231,6 +266,38 @@ private struct NewListSheet: View {
                 // Focus after the sheet animates in
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
                     isNameFocused = true
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Settings
+
+private struct SettingsView: View {
+    @Environment(\.dismiss) private var dismiss
+
+    private var versionString: String {
+        (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String) ?? "—"
+    }
+
+    private var buildString: String {
+        (Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String) ?? "—"
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("About") {
+                    LabeledContent("Version", value: versionString)
+                    LabeledContent("Build", value: buildString)
+                }
+            }
+            .navigationTitle("Settings")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
                 }
             }
         }
