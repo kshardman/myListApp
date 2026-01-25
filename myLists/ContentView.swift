@@ -8,18 +8,51 @@
 //
 
 
+
 import SwiftUI
 import SwiftData
+
+private enum ListSortOrder: String, CaseIterable, Identifiable {
+    case mostRecent
+    case nameAZ
+    case createdNewest
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .mostRecent: return "Most Recent"
+        case .nameAZ: return "Name (A–Z)"
+        case .createdNewest: return "Created (Newest)"
+        }
+    }
+}
 
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject private var undoCenter: UndoCenter
 
+    @AppStorage("listSortOrder") private var listSortOrderRaw: String = ListSortOrder.mostRecent.rawValue
+
+    private var listSortOrder: ListSortOrder {
+        ListSortOrder(rawValue: listSortOrderRaw) ?? .mostRecent
+    }
+
     @Query(
-        filter: #Predicate<ListDocument> { $0.isDeleted == false },
-        sort: [SortDescriptor(\ListDocument.updatedAt, order: .reverse)]
+        filter: #Predicate<ListDocument> { $0.isDeleted == false }
     )
     private var docs: [ListDocument]
+
+    private var sortedDocs: [ListDocument] {
+        switch listSortOrder {
+        case .mostRecent:
+            return docs.sorted { $0.updatedAt > $1.updatedAt }
+        case .nameAZ:
+            return docs.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        case .createdNewest:
+            return docs.sorted { $0.createdAt > $1.createdAt }
+        }
+    }
 
     @State private var showingShare: Bool = false
     @State private var shareItems: [Any] = []
@@ -51,7 +84,7 @@ struct ContentView: View {
                 }
                 .listRowSeparator(.hidden)
 
-                ForEach(docs) { doc in
+                ForEach(sortedDocs) { doc in
                     NavigationLink(value: doc) {
                         Text(doc.name)
                     }
@@ -279,6 +312,7 @@ private struct NewListSheet: View {
 
 private struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
+    @AppStorage("listSortOrder") private var listSortOrderRaw: String = ListSortOrder.mostRecent.rawValue
 
     private var versionString: String {
         (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String) ?? "—"
@@ -291,6 +325,13 @@ private struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section("Lists") {
+                    Picker("Sort", selection: $listSortOrderRaw) {
+                        ForEach(ListSortOrder.allCases) { option in
+                            Text(option.title).tag(option.rawValue)
+                        }
+                    }
+                }
                 Section("About") {
                     LabeledContent("Version", value: versionString)
                     LabeledContent("Build", value: buildString)

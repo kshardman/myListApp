@@ -16,12 +16,38 @@ struct ListDetailView: View {
     // Tail behavior
     @State private var pendingScrollToItemID: UUID?
     
-    @State private var isEditingItem: Bool = false
+    @State private var showingEditOverlay: Bool = false
     @State private var editingItemID: UUID? = nil
     @State private var editItemText: String = ""
+    @FocusState private var isEditOverlayFieldFocused: Bool
     @State private var showingAddOverlay: Bool = false
     @State private var overlayItemText: String = ""
     @FocusState private var isOverlayFieldFocused: Bool
+
+    // MARK: - Indent (1 level)
+    private let indentStep: CGFloat = 24
+
+    private func indentKey(for itemID: UUID) -> String {
+        "indent_\(document.id.uuidString)_\(itemID.uuidString)"
+    }
+
+    private func indentLevel(for item: ListItem) -> Int {
+        UserDefaults.standard.integer(forKey: indentKey(for: item.id))
+    }
+
+    private func setIndentLevel(_ level: Int, for item: ListItem) {
+        let clamped = max(0, min(1, level))
+        UserDefaults.standard.set(clamped, forKey: indentKey(for: item.id))
+    }
+
+    private func toggleIndent(_ item: ListItem) {
+        let current = indentLevel(for: item)
+        setIndentLevel(current == 0 ? 1 : 0, for: item)
+        // Force SwiftUI refresh
+        item.updatedAt = Date()
+        document.updatedAt = Date()
+        try? modelContext.save()
+    }
     
 
     private var visibleItems: [ListItem] {
@@ -35,7 +61,7 @@ struct ListDetailView: View {
             List {
                 Section {
                     ForEach(visibleItems) { item in
-                        HStack(spacing: 12) {
+                        HStack(alignment: .firstTextBaseline, spacing: 12) {
                             Button {
                                 toggleDone(item)
                             } label: {
@@ -46,14 +72,29 @@ struct ListDetailView: View {
                             Text(item.text)
                                 .strikethrough(item.isDone, color: .secondary)
                                 .foregroundStyle(item.isDone ? .secondary : .primary)
+                                .multilineTextAlignment(.leading)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
+                        .padding(.leading, CGFloat(indentLevel(for: item)) * indentStep)
                         .id(item.id)
                         .contentShape(Rectangle())
                         .onTapGesture {
                             dismissKeyboard()
                             editingItemID = item.id
                             editItemText = item.text
-                            isEditingItem = true
+                            showingEditOverlay = true
+                        }
+                        .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                            Button {
+                                toggleIndent(item)
+                            } label: {
+                                if indentLevel(for: item) == 0 {
+                                    Label("Indent", systemImage: "arrow.right.to.line")
+                                } else {
+                                    Label("Outdent", systemImage: "arrow.left.to.line")
+                                }
+                            }
+                            .tint(.gray)
                         }
                     }
                     .onDelete(perform: deleteItems)
@@ -95,9 +136,16 @@ struct ListDetailView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .principal) {
-                    Text(document.name)
-                        .font(.headline)
-                        .lineLimit(1)
+                    Button {
+                        draftName = document.name
+                        isRenaming = true
+                    } label: {
+                        Text(document.name)
+                            .font(.headline)
+                            .lineLimit(1)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Rename list")
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     HStack {
@@ -107,24 +155,15 @@ struct ListDetailView: View {
                             overlayItemText = ""
                             showingAddOverlay = true
                         } label: {
-                            Image(systemName: "plus")
+                            Image(systemName: "square.and.pencil")
                         }
 
                         Button {
                             deleteDoneItems()
                         } label: {
-                            Image(systemName: "minus")
+                            Image(systemName: "trash")
                         }
                         .accessibilityLabel("Delete completed")
-
-                        Button {
-                            draftName = document.name
-                            isRenaming = true
-                        } label: {
-                            Image(systemName: "square.and.pencil")
-                                .padding(8)
-                        }
-                        .accessibilityLabel("Rename list")
                     }
                 }
             }
@@ -132,11 +171,6 @@ struct ListDetailView: View {
                 TextField("Name", text: $draftName)
                 Button("Cancel", role: .cancel) { }
                 Button("Save") { renameList() }
-            }
-            .alert("Edit item", isPresented: $isEditingItem) {
-                TextField("Item", text: $editItemText)
-                Button("Cancel", role: .cancel) { editingItemID = nil }
-                Button("Save") { saveEditedItem() }
             }
             .overlay(alignment: .bottom) {
                 UndoBanner()
@@ -157,11 +191,22 @@ struct ListDetailView: View {
                             Text("New Item")
                                 .font(.headline)
 
-                            TextField("Enter item…", text: $overlayItemText)
-                                .textFieldStyle(.roundedBorder)
-                                .focused($isOverlayFieldFocused)
-                                .submitLabel(.done)
-                                .onSubmit { saveOverlayItem(keepOpen: true) }
+                            ZStack(alignment: .topLeading) {
+                                if overlayItemText.isEmpty {
+                                    Text("Enter item…")
+                                        .foregroundStyle(.secondary)
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 10)
+                                }
+
+                                TextEditor(text: $overlayItemText)
+                                    .focused($isOverlayFieldFocused)
+                                    .frame(minHeight: 96, maxHeight: 180)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 6)
+                            }
+                            .background(.thinMaterial)
+                            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
 
                             HStack {
                                 Button("Done", role: .cancel) {
@@ -170,7 +215,7 @@ struct ListDetailView: View {
                                 }
                                 Spacer()
                                 Button("Add") {
-                                    saveOverlayItem(keepOpen: true)
+                                    saveOverlayItem(keepOpen: false)
                                 }
                                 .buttonStyle(.borderedProminent)
                             }
@@ -184,6 +229,62 @@ struct ListDetailView: View {
                     .onAppear {
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
                             isOverlayFieldFocused = true
+                        }
+                    }
+                }
+                if showingEditOverlay {
+                    ZStack {
+                        Color.black.opacity(0.25)
+                            .ignoresSafeArea()
+                            .onTapGesture {
+                                showingEditOverlay = false
+                                dismissKeyboard()
+                            }
+
+                        VStack(spacing: 12) {
+                            Text("Edit Item")
+                                .font(.headline)
+
+                            ZStack(alignment: .topLeading) {
+                                if editItemText.isEmpty {
+                                    Text("Item…")
+                                        .foregroundStyle(.secondary)
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 10)
+                                }
+
+                                TextEditor(text: $editItemText)
+                                    .focused($isEditOverlayFieldFocused)
+                                    .frame(minHeight: 120, maxHeight: 240)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 6)
+                            }
+                            .background(.thinMaterial)
+                            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+                            HStack {
+                                Button("Done", role: .cancel) {
+                                    showingEditOverlay = false
+                                    dismissKeyboard()
+                                }
+                                Spacer()
+                                Button("Save") {
+                                    saveEditedItem()
+                                    showingEditOverlay = false
+                                    dismissKeyboard()
+                                }
+                                .buttonStyle(.borderedProminent)
+                            }
+                        }
+                        .padding(16)
+                        .frame(maxWidth: 420)
+                        .background(.regularMaterial)
+                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        .padding(.horizontal, 24)
+                    }
+                    .onAppear {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                            isEditOverlayFieldFocused = true
                         }
                     }
                 }
@@ -216,6 +317,9 @@ struct ListDetailView: View {
 
         // Capture IDs for undo before mutating
         let ids = doneItems.map { $0.id }
+
+        // Clear indent on items being deleted so an undo comes back clean
+        for id in ids { UserDefaults.standard.removeObject(forKey: indentKey(for: id)) }
 
         for item in doneItems {
             // Remove from relationship so row disappears immediately
@@ -273,6 +377,9 @@ struct ListDetailView: View {
         item.updatedAt = Date()
         document.updatedAt = Date()
         try? modelContext.save()
+
+        // Clear indent so undo restores without nesting
+        UserDefaults.standard.removeObject(forKey: indentKey(for: item.id))
 
         let pending = UndoCenter.PendingUndo(
             kind: .item(item.id, document.id),
