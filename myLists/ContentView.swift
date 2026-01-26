@@ -332,10 +332,20 @@ private struct SettingsView: View {
                         }
                     }
                 }
+                Section("Privacy") {
+                    Link(destination: URL(string: "https://kshardman.github.io/myListApp/")!) {
+                        HStack {
+                            Text("Privacy Policy")
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
                 Section("About") {
                     LabeledContent("Version", value: versionString)
                     LabeledContent("Build", value: buildString)
-                }
+                }                
             }
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
