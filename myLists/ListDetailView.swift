@@ -156,12 +156,14 @@ struct ListDetailView: View {
                             showingAddOverlay = true
                         } label: {
                             Image(systemName: "square.and.pencil")
+                                .padding(8)
                         }
 
                         Button {
                             deleteDoneItems()
                         } label: {
                             Image(systemName: "trash")
+                                .padding(8)
                         }
                         .accessibilityLabel("Delete completed")
                     }
