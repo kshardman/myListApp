@@ -241,7 +241,7 @@ struct ListDetailView: View {
                             overlayItemText = ""
                             showingAddOverlay = true
                         } label: {
-                            Image(systemName: "square.and.pencil")
+                            Image(systemName: "plus")
                                 .padding(8)
                         }
 
@@ -298,13 +298,19 @@ struct ListDetailView: View {
                             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
 
                             HStack {
-                                Button("Done", role: .cancel) {
-                                    showingAddOverlay = false
-                                    dismissKeyboard()
+                                Button("Done") {
+                                    let trimmed = overlayItemText.trimmingCharacters(in: .whitespacesAndNewlines)
+                                    if !trimmed.isEmpty {
+                                        saveOverlayItem(keepOpen: false)   // add what’s typed, then close
+                                    } else {
+                                        showingAddOverlay = false          // nothing typed, just close
+                                        dismissKeyboard()
+                                    }
                                 }
+
                                 Spacer()
                                 Button("Add") {
-                                    saveOverlayItem(keepOpen: false)
+                                    saveOverlayItem(keepOpen: true)
                                 }
                                 .buttonStyle(.borderedProminent)
                             }
@@ -352,7 +358,7 @@ struct ListDetailView: View {
                             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
 
                             HStack {
-                                Button("Done", role: .cancel) {
+                                Button("Cancel", role: .cancel) {
                                     showingEditOverlay = false
                                     dismissKeyboard()
                                 }
@@ -518,6 +524,9 @@ private func saveOverlayItem(keepOpen: Bool = false) {
     // ready for next entry
     overlayItemText = ""
 
+    DispatchQueue.main.async {
+        isOverlayFieldFocused = true
+    }
     if keepOpen {
         // keep overlay + keyboard up
         DispatchQueue.main.async { isOverlayFieldFocused = true }

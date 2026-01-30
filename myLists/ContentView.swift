@@ -197,7 +197,7 @@ struct ContentView: View {
         let pending = UndoCenter.PendingUndo(
             kind: .list(doc.id),
             message: "List deleted",
-            expiresAt: Date().addingTimeInterval(5)
+            expiresAt: Date().addingTimeInterval(10)
         )
 
         undoCenter.setPending(pending, finalize: { [weak modelContext] in
@@ -343,9 +343,13 @@ private struct SettingsView: View {
                     }
                 }
                 Section("About") {
-                    LabeledContent("Version", value: versionString)
-                    LabeledContent("Build", value: buildString)
-                }                
+                    HStack {
+                        Text("Version")
+                        Spacer()
+                        Text("\(versionString) (\(buildString))")
+                            .foregroundStyle(.secondary)
+                    }
+                }
             }
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
