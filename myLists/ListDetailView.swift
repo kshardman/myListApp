@@ -56,6 +56,83 @@ struct ListDetailView: View {
             .sorted { $0.sortIndex < $1.sortIndex }
     }
 
+    private var pendingItemUndo: UndoCenter.PendingUndo? {
+        guard let p = undoCenter.pending else { return nil }
+
+        switch p.kind {
+        case .item(_, let listID) where listID == document.id:
+            return p
+        case .bulkItems(_, let listID) where listID == document.id:
+            return p
+        default:
+            return nil
+        }
+    }
+
+    private func performPendingUndo() {
+        guard let pending = pendingItemUndo else { return }
+
+        switch pending.kind {
+
+        case .item(let itemID, let listID):
+            let itemDescriptor = FetchDescriptor<ListItem>(
+                predicate: #Predicate { $0.id == itemID }
+            )
+            let docDescriptor = FetchDescriptor<ListDocument>(
+                predicate: #Predicate { $0.id == listID }
+            )
+
+            if let item = try? modelContext.fetch(itemDescriptor).first,
+               let doc = try? modelContext.fetch(docDescriptor).first {
+
+                item.isDeleted = false
+                item.deletedAt = nil
+                item.isDone = false
+                item.updatedAt = Date()
+
+                if let existing = doc.items.firstIndex(where: { $0.id == item.id }) {
+                    doc.items.remove(at: existing)
+                }
+                doc.items.append(item)
+                doc.updatedAt = Date()
+
+                try? modelContext.save()
+            }
+
+        case .bulkItems(let itemIDs, let listID):
+            let docDescriptor = FetchDescriptor<ListDocument>(
+                predicate: #Predicate { $0.id == listID }
+            )
+
+            guard let doc = try? modelContext.fetch(docDescriptor).first else { break }
+
+            for itemID in itemIDs {
+                let itemDescriptor = FetchDescriptor<ListItem>(
+                    predicate: #Predicate { $0.id == itemID }
+                )
+                guard let item = try? modelContext.fetch(itemDescriptor).first else { continue }
+
+                item.isDeleted = false
+                item.deletedAt = nil
+                item.isDone = false
+                item.updatedAt = Date()
+
+                if !doc.items.contains(where: { $0.id == item.id }) {
+                    doc.items.append(item)
+                }
+            }
+
+            doc.updatedAt = Date()
+            try? modelContext.save()
+
+        default:
+            break
+        }
+
+        undoCenter.clearPending()
+    }
+    
+    
     var body: some View {
         ScrollViewReader { proxy in
             List {
@@ -135,6 +212,15 @@ struct ListDetailView: View {
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button { performPendingUndo() } label: {
+                        Image(systemName: "arrow.uturn.backward.circle")
+                            .font(.system(size: 18))
+                    }
+                    .disabled(pendingItemUndo == nil)
+                    .opacity(pendingItemUndo == nil ? 0.35 : 1)
+                    .accessibilityLabel("Undo")
+                }
                 ToolbarItem(placement: .principal) {
                     Button {
                         draftName = document.name
@@ -174,10 +260,11 @@ struct ListDetailView: View {
                 Button("Cancel", role: .cancel) { }
                 Button("Save") { renameList() }
             }
-            .overlay(alignment: .bottom) {
+            .overlay(alignment: .top) {
                 UndoBanner()
                     .padding(.horizontal)
-                    .padding(.bottom, 12)
+                    .padding(.top, 12)
+                    .animation(.easeInOut, value: undoCenter.pending)
             }
             .overlay {
                 if showingAddOverlay {
